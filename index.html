@@ -86,6 +86,20 @@ const partyNames = {
   19: "Ժողովրդավարության պաշտպաններ"
 };
 
+  function getColors(count) {
+  const base = [
+    "#FFA726", "#66BB6A", "#42A5F5", "#AB47BC",
+    "#FF7043", "#26C6DA", "#D4E157", "#8D6E63",
+    "#EC407A", "#78909C"
+  ];
+
+  const colors = [];
+  for (let i = 0; i < count; i++) {
+    colors.push(base[i % base.length]);
+  }
+  return colors;
+}
+
 // ===== LOAD DATA =====
 function loadData(callback) {
   if (cache) return callback();
@@ -312,20 +326,27 @@ let barChart, pieChart;
 function renderCharts(rows) {
   const labels = rows.map(r => r.id);
   const data = rows.map(r => r.votes);
+  const colors = getColors(rows.length);
 
   if (barChart) barChart.destroy();
   if (pieChart) pieChart.destroy();
 
+  // BAR CHART
   barChart = new Chart(document.getElementById("barChart"), {
     type: 'bar',
-    data: { labels, datasets: [{ data }] }
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colors
+      }]
+    },
+    options: {
+      plugins: {
+        legend: { display: false }
+      }
+    }
   });
-
- // pieChart = new Chart(document.getElementById("pieChart"), {
- //   type: 'pie',
- //   data: { labels, datasets: [{ data }] }
- // });
-}
 
 // ===== START =====
 loadAll();
