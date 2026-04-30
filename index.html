@@ -3,26 +3,94 @@
 <head>
   <title>Votes Admin</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-
   <style>
-    body { font-family: Arial; padding: 20px; }
-    .hidden { display: none; }
+    body {
+      font-family: Arial;
+      padding: 20px;
+    }
+
+    button {
+      margin: 5px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+
+    #grid button {
+      width: 80px;
+      margin: 4px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    /* ===== CUSTOM CHART ===== */
+    #chartWrap {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+      height: 320px;
+      margin-top: 20px;
+    }
+
+    .partyCol {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 70px;
+      font-size: 12px;
+    }
+
+    .bar {
+      width: 100%;
+      border-radius: 6px 6px 0 0;
+      margin: 5px 0;
+      transition: height 0.3s ease;
+    }
+
+    .logo {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+      margin-top: 4px;
+    }
   </style>
 </head>
+
 <body>
 
-<h2>Votes</h2>
+<h2 id="title">Votes</h2>
 
-<canvas id="barChart"></canvas>
+<button onclick="setMode('ALL')">ALL</button>
+<button onclick="setMode('TOP')">TOP</button>
+
+<br><br>
+
+<button onclick="setDisplay('LIST')">LIST</button>
+<button onclick="setDisplay('CHART')">CHART</button>
+
+<hr>
+
+<div id="grid"></div>
+<div id="list"></div>
+<div id="chartWrap" class="hidden"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
 <script>
+const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "parlo1-28056.firebaseapp.com",
+  databaseURL: "https://parlo1-28056-default-rtdb.europe-west1.firebasedatabase.app",
+};
 
-// ===== PARTIES (SHORT NAMES) =====
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+const VERSION = "3333";
+
+// ===== PARTIES =====
 const parties = [
   { id:1, short:"ՔՊ", logo:"https://upload.wikimedia.org/wikipedia/commons/6/6a/Logo_of_the_Civil_Contract_%28Armenia%29.svg"},
   { id:2, short:"ԲՀԿ", logo:"https://www.bhk.am/sites/default/files/BHK%20logo_0.png"},
@@ -45,125 +113,127 @@ const parties = [
   { id:19, short:"Հանուն", logo:"https://upload.wikimedia.org/wikipedia/commons/1/1f/%D5%80%D5%A1%D5%B6%D5%B8%D6%82%D5%B6.png"}
 ];
 
-// ===== LOGO CACHE =====
-const logoCache = {};
+// ===== STATE =====
+let display = "LIST";
+let selectedTopN = null;
+let cache = null;
 
-function getLogo(id){
-  if (logoCache[id]) return logoCache[id];
-
-  const party = parties.find(p=>p.id==id);
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  img.src = party?.logo || "";
-
-  img.onerror = () => {
-    img.src = "https://via.placeholder.com/100?text=?";
-  };
-
-  logoCache[id] = img;
-  return img;
+// ===== COLORS =====
+function getColorByPartyId(id) {
+  const palette = ["#FFA726","#66BB6A","#42A5F5","#AB47BC","#FF7043","#26C6DA","#D4E157","#8D6E63","#EC407A","#78909C"];
+  return palette[(id - 1) % palette.length];
 }
 
-// ===== LOGO PLUGIN =====
-const logoPlugin = {
-  id: 'logoPlugin',
-  afterDraw(chart) {
-    const { ctx, chartArea, scales } = chart;
-    const xScale = scales.x;
+// ===== LIVE =====
+db.ref("votes/" + VERSION).on("value", (snap) => {
+  cache = snap.val() || {};
+  calculateAll();
+});
 
-    chart.data.ids.forEach((id, i) => {
-      const img = getLogo(id);
-      if (!img.complete) return;
+// ===== DISPLAY =====
+function setDisplay(d) {
+  display = d;
+  document.getElementById("list").classList.add("hidden");
+  document.getElementById("chartWrap").classList.add("hidden");
 
-      const x = xScale.getPixelForValue(i);
-      const size = 30; // logo size (you can increase to 40–50)
+  if (d === "LIST") document.getElementById("list").classList.remove("hidden");
+  if (d === "CHART") document.getElementById("chartWrap").classList.remove("hidden");
+}
 
-      const y = chartArea.bottom + 30; // BELOW labels
-
-      ctx.drawImage(img, x - size / 2, y, size, size);
-    });
-  }
-};
-
-// ===== FIREBASE =====
-const firebaseConfig = {
-  apiKey: "AIzaSy...",
-  authDomain: "parlo1-28056.firebaseapp.com",
-  databaseURL: "https://parlo1-28056-default-rtdb.europe-west1.firebasedatabase.app",
-};
-
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-
-let barChart;
-
-// ===== LOAD DATA =====
-db.ref("votes/3333").on("value", snap=>{
-  const data = snap.val() || {};
+// ===== DATA =====
+function calculateAll() {
+  if (!cache) return;
 
   const totals = new Array(20).fill(0);
 
-  for (let r in data){
-    for (let s in data[r]){
-      const p = data[r][s].parties || {};
-      for (let i in p) totals[i]+=p[i];
+  for (let r in cache) {
+    for (let s in cache[r]) {
+      const p = cache[r][s].parties || {};
+      for (let i in p) totals[i] += p[i];
     }
   }
 
-  render(totals);
-});
+  renderAll(totals);
+}
+
+// ===== TOP =====
+function setMode(m) {
+  if (m === "TOP") {
+    renderGrid(Array.from({length:19},(_,i)=>i+1), n => {
+      selectedTopN = n;
+      calculateAll();
+    });
+  }
+}
+
+// ===== GRID =====
+function renderGrid(items, onClick) {
+  const grid = document.getElementById("grid");
+  grid.innerHTML = "";
+
+  items.forEach(i => {
+    const btn = document.createElement("button");
+    btn.innerText = i;
+    btn.onclick = () => onClick(i);
+    grid.appendChild(btn);
+  });
+}
 
 // ===== RENDER =====
-function render(totals){
-
+function renderAll(totals) {
   let rows = [];
-  for(let i=1;i<=19;i++){
-    rows.push({id:i, votes:totals[i]});
+
+  for (let i = 1; i <= 19; i++) {
+    rows.push({ id: i, votes: totals[i] });
   }
 
   rows.sort((a,b)=>b.votes-a.votes);
 
-  const labels = rows.map(r=>{
-    const p = parties.find(x=>x.id===r.id);
-    return r.id + " " + (p?.short || "");
-  });
+  if (selectedTopN) rows = rows.slice(0, selectedTopN);
 
-  const ids = rows.map(r=>r.id);
-  const values = rows.map(r=>r.votes);
+  renderList(rows);
+  renderChart(rows);
+}
 
-  if (barChart) barChart.destroy();
+// ===== LIST =====
+function renderList(rows) {
+  const list = document.getElementById("list");
+  list.innerHTML = "";
 
-  barChart = new Chart(document.getElementById("barChart"), {
-    type:'bar',
-    data:{
-      labels,
-      ids,
-      datasets:[{ data: values }]
-    },
-    options:{
-      layout:{  padding:{
-      top:120,
-      bottom:80   // 👈 ADD THIS
-    }},
-      plugins:{
-        legend:{display:false},
-        datalabels:{
-          anchor:'end',
-          align:'top',
-          offset:50,
-          font:{weight:'bold'},
-          formatter:(v,ctx)=>{
-            const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
-            const percent = total ? ((v/total)*100).toFixed(1):0;
-            return v+" ("+percent+"%)";
-          }
-        }
-      }
-    },
-    plugins:[ChartDataLabels, logoPlugin]
+  rows.forEach(r => {
+    const div = document.createElement("div");
+    div.innerText = `Party ${r.id}: ${r.votes}`;
+    list.appendChild(div);
   });
 }
 
+// ===== CUSTOM CHART =====
+function renderChart(rows) {
+  const wrap = document.getElementById("chartWrap");
+  wrap.innerHTML = "";
+
+  const total = rows.reduce((a,b)=>a+b.votes,0);
+  const maxVotes = Math.max(...rows.map(r=>r.votes), 1);
+
+  rows.forEach(r => {
+    const percent = total ? ((r.votes / total) * 100).toFixed(1) : 0;
+    const party = parties.find(p => p.id === r.id) || {};
+
+    const col = document.createElement("div");
+    col.className = "partyCol";
+
+    col.innerHTML = `
+      <div>${percent}%</div>
+      <div>${r.votes}</div>
+      <div class="bar" style="height:${(r.votes / maxVotes * 150)}px;background:${getColorByPartyId(r.id)}"></div>
+      <div>${party.short || "-"}</div>
+      <img class="logo" src="${party.logo || ''}" onerror="this.src='https://via.placeholder.com/40?text=?'">
+      <div>${r.id}</div>
+    `;
+
+    wrap.appendChild(col);
+  });
+}
 </script>
 
 </body>
