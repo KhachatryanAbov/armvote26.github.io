@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>Votes Admin</title>
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 
@@ -36,18 +37,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
 <script>
-const firebaseConfig = {
-  apiKey: "AIzaSy...",
-  authDomain: "parlo1-28056.firebaseapp.com",
-  databaseURL: "https://parlo1-28056-default-rtdb.europe-west1.firebasedatabase.app",
-};
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-
-const VERSION = "3333";
-
-  const parties = [
+// ===== PARTIES =====
+const parties = [
   { id: 1, name: "Քաղաքացիական պայմանագիր", logo: "https://upload.wikimedia.org/wikipedia/commons/6/6a/Logo_of_the_Civil_Contract_%28Armenia%29.svg" },
   { id: 2, name: "Բարգավաճ Հայաստան", logo: "https://www.bhk.am/sites/default/files/BHK%20logo_0.png" },
   { id: 3, name: "Հայաստանի Շնորհապետական", logo: "https://upload.wikimedia.org/wikipedia/commons/3/3f/MPALogo.jpg" },
@@ -69,23 +61,8 @@ const VERSION = "3333";
   { id: 19, name: "Հանուն Հանրապետության...", logo: "https://upload.wikimedia.org/wikipedia/commons/1/1f/%D5%80%D5%A1%D5%B6%D5%B8%D6%82%D5%B6.png" }
 ];
 
-// ===== STATE =====
-let display = "LIST";
-let selectedRegion = null;
-let selectedStation = null;
-let selectedTopN = null;
-let cache = null;
-
-let currentScope = { type: "ALL" };
-let dbRef = null;
-
-// ===== COLORS =====
-function getColors(count) {
-  const base = ["#FFA726","#66BB6A","#42A5F5","#AB47BC","#FF7043","#26C6DA","#D4E157","#8D6E63","#EC407A","#78909C"];
-  return Array.from({length: count}, (_, i) => base[i % base.length]);
-}
-
-  const logoCache = {};
+// ===== LOGO CACHE =====
+const logoCache = {};
 
 function getLogo(id) {
   if (logoCache[id]) return logoCache[id];
@@ -94,11 +71,9 @@ function getLogo(id) {
 
   const img = new Image();
   img.crossOrigin = "anonymous";
-
   img.src = party?.logo || "";
 
   img.onerror = () => {
-    // fallback placeholder
     img.src = "https://via.placeholder.com/100?text=?";
   };
 
@@ -106,7 +81,8 @@ function getLogo(id) {
   return img;
 }
 
-  const logoPlugin = {
+// ===== LOGO PLUGIN =====
+const logoPlugin = {
   id: 'logoPlugin',
   afterDatasetsDraw(chart) {
     const { ctx } = chart;
@@ -119,7 +95,7 @@ function getLogo(id) {
       if (!img.complete) return;
 
       const width = bar.width;
-      const height = width; // square
+      const height = width;
 
       const x = bar.x - width / 2;
       const y = bar.y - height - 10;
@@ -129,95 +105,45 @@ function getLogo(id) {
   }
 };
 
+// ===== FIREBASE =====
+const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "parlo1-28056.firebaseapp.com",
+  databaseURL: "https://parlo1-28056-default-rtdb.europe-west1.firebasedatabase.app",
+};
 
-  barChart = new Chart(document.getElementById("barChart"), {
-  type: 'bar',
-  data: {
-    labels,
-    datasets: [{
-      data,
-      backgroundColor: colors
-    }]
-  },
-  options: {
-    layout: {
-      padding: {
-        top: 80 // 👈 IMPORTANT: space for logos + labels
-      }
-    },
-    plugins: {
-      legend: { display: false },
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
-      datalabels: {
-        anchor: 'end',
-        align: 'top',
-        offset: 30, // 👈 push text above logo
-        color: '#111',
-        font: {
-          weight: 'bold',
-          size: 12
-        },
-        formatter: function(value, ctx) {
-          const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
-          const percent = total ? ((value / total) * 100).toFixed(1) : 0;
-          return value + " (" + percent + "%)";
-        }
-      }
-    }
-  },
-  plugins: [ChartDataLabels, logoPlugin] // 👈 ADD HERE
-});
+const VERSION = "3333";
 
-  
+// ===== STATE =====
+let display = "LIST";
+let cache = null;
+let currentScope = { type: "ALL" };
+let barChart;
 
-// ===== LIVE UPDATES =====
+// ===== COLORS =====
+function getColorByPartyId(id) {
+  const palette = ["#FFA726","#66BB6A","#42A5F5","#AB47BC","#FF7043","#26C6DA","#D4E157","#8D6E63","#EC407A","#78909C"];
+  return palette[(id - 1) % palette.length];
+}
+
+// ===== LIVE =====
 function startLiveUpdates() {
-  dbRef = db.ref("votes/" + VERSION);
-
-  dbRef.on("value", (snapshot) => {
-    cache = snapshot.val() || {};
-    console.log("🔥 Live update");
+  db.ref("votes/" + VERSION).on("value", (snap) => {
+    cache = snap.val() || {};
     refreshCurrentView();
   });
 }
 
-// ===== MODE =====
-function setMode(m) {
-  selectedRegion = null;
-  selectedStation = null;
-
-  if (m === "ALL") loadAll();
-  if (m === "REGION") showRegions(false);
-  if (m === "STATION") showRegions(true);
-  if (m === "TOP") showTopPicker();
-}
-
-// ===== DISPLAY =====
-function setDisplay(d) {
-  display = d;
-  document.getElementById("list").classList.add("hidden");
-  document.getElementById("barChart").classList.add("hidden");
-
-  if (d === "LIST") document.getElementById("list").classList.remove("hidden");
-  if (d === "CHART") document.getElementById("barChart").classList.remove("hidden");
-}
-
-// ===== REFRESH (LIKE ANDROID) =====
+// ===== VIEW =====
 function refreshCurrentView() {
   if (!cache) return;
-
-  if (currentScope.type === "ALL") calculateAll();
-  if (currentScope.type === "REGION") calculateRegion(currentScope.region);
-  if (currentScope.type === "STATION") calculateStation(currentScope.region, currentScope.station);
-}
-
-// ===== ALL =====
-function loadAll() {
-  document.getElementById("title").innerText = "ALL";
-  currentScope = { type: "ALL" };
   calculateAll();
 }
 
+// ===== CALC =====
 function calculateAll() {
   const totals = new Array(20).fill(0);
 
@@ -231,79 +157,6 @@ function calculateAll() {
   renderAll(totals);
 }
 
-// ===== REGION =====
-function showRegions(forStation) {
-  document.getElementById("title").innerText = "Select Region";
-  renderGrid(Object.keys(cache), r => {
-    selectedRegion = r;
-    if (forStation) showStations(r);
-    else loadRegion(r);
-  });
-}
-
-function loadRegion(region) {
-  document.getElementById("title").innerText = "Region " + region;
-  currentScope = { type: "REGION", region };
-  calculateRegion(region);
-}
-
-function calculateRegion(region) {
-  const totals = new Array(20).fill(0);
-  const data = cache[region] || {};
-
-  for (let s in data) {
-    const parties = data[s].parties || {};
-    for (let p in parties) totals[p] += parties[p];
-  }
-
-  renderAll(totals);
-}
-
-// ===== STATION =====
-function showStations(region) {
-  document.getElementById("title").innerText = "Select Station";
-  renderGrid(Object.keys(cache[region]), s => {
-    selectedStation = s;
-    loadStation(region, s);
-  });
-}
-
-function loadStation(region, station) {
-  document.getElementById("title").innerText = "Station " + station;
-  currentScope = { type: "STATION", region, station };
-  calculateStation(region, station);
-}
-
-function calculateStation(region, station) {
-  const totals = new Array(20).fill(0);
-  const parties = cache?.[region]?.[station]?.parties || {};
-
-  for (let p in parties) totals[p] = parties[p];
-
-  renderAll(totals);
-}
-
-// ===== TOP =====
-function showTopPicker() {
-  document.getElementById("title").innerText = "Select Top N";
-  renderGrid(Array.from({length:19},(_,i)=>i+1), n => {
-    selectedTopN = n;
-    refreshCurrentView();
-  });
-}
-
-// ===== GRID =====
-function renderGrid(items, onClick) {
-  const grid = document.getElementById("grid");
-  grid.innerHTML = "";
-  items.forEach(i => {
-    const btn = document.createElement("button");
-    btn.innerText = i;
-    btn.onclick = () => onClick(i);
-    grid.appendChild(btn);
-  });
-}
-
 // ===== RENDER =====
 function renderAll(totals) {
   let rows = [];
@@ -313,36 +166,11 @@ function renderAll(totals) {
   }
 
   rows.sort((a,b)=>b.votes-a.votes);
-  if (selectedTopN) rows = rows.slice(0, selectedTopN);
 
-  renderList(rows);
   renderChart(rows);
 }
 
-  function getColorByPartyId(id) {
-  const palette = [
-    "#FFA726", "#66BB6A", "#42A5F5", "#AB47BC",
-    "#FF7043", "#26C6DA", "#D4E157", "#8D6E63",
-    "#EC407A", "#78909C"
-  ];
-
-  return palette[(id - 1) % palette.length];
-}
-
-// ===== LIST =====
-function renderList(rows) {
-  const list = document.getElementById("list");
-  list.innerHTML = "";
-  rows.forEach(r => {
-    const div = document.createElement("div");
-    div.innerText = `Party ${r.id}: ${r.votes}`;
-    list.appendChild(div);
-  });
-}
-
 // ===== CHART =====
-let barChart;
-
 function renderChart(rows) {
   const labels = rows.map(r => r.id);
   const data = rows.map(r => r.votes);
@@ -360,33 +188,31 @@ function renderChart(rows) {
       }]
     },
     options: {
+      layout: {
+        padding: { top: 90 }
+      },
       plugins: {
         legend: { display: false },
-
-        // 👇 THIS is the important part
         datalabels: {
           anchor: 'end',
           align: 'top',
+          offset: 40,
           color: '#111',
-          font: {
-            weight: 'bold',
-            size: 12
-          },
+          font: { weight: 'bold', size: 12 },
           formatter: function(value, ctx) {
-  const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
-  const percent = total ? ((value / total) * 100).toFixed(1) : 0;
-  return value + " (" + percent + "%)";
-}
+            const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
+            const percent = total ? ((value / total) * 100).toFixed(1) : 0;
+            return value + " (" + percent + "%)";
+          }
         }
       }
     },
-    plugins: [ChartDataLabels] // 👈 enable plugin
+    plugins: [ChartDataLabels, logoPlugin]
   });
 }
 
 // ===== START =====
 startLiveUpdates();
-loadAll();
 
 </script>
 
