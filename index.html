@@ -36,7 +36,7 @@
 <!-- LIST -->
 <div id="list"></div>
 
-<!-- CHART -->
+<!-- CHARTS -->
 <canvas id="barChart" class="hidden"></canvas>
 <canvas id="pieChart" class="hidden"></canvas>
 
@@ -56,7 +56,7 @@ const db = firebase.database();
 
 const VERSION = "3333";
 
-// ===== STATE (like Fragment) =====
+// ===== STATE =====
 let mode = "ALL";
 let display = "LIST";
 let selectedRegion = null;
@@ -87,7 +87,7 @@ const partyNames = {
   19: "Ժողովրդավարության պաշտպաններ"
 };
 
-// ===== LOAD CACHE =====
+// ===== LOAD DATA =====
 function loadData(callback) {
   if (cache) return callback();
 
@@ -97,19 +97,19 @@ function loadData(callback) {
   });
 }
 
-// ===== MODE SWITCH =====
+// ===== MODE =====
 function setMode(m) {
   mode = m;
   selectedRegion = null;
   selectedStation = null;
 
   if (m === "ALL") loadAll();
-  if (m === "REGION") showRegions();
+  if (m === "REGION") showRegions(false);
   if (m === "STATION") showRegions(true);
   if (m === "TOP") showTopPicker();
 }
 
-// ===== DISPLAY SWITCH =====
+// ===== DISPLAY =====
 function setDisplay(d) {
   display = d;
 
@@ -132,10 +132,11 @@ function loadAll() {
 }
 
 // ===== REGIONS =====
-function showRegions(forStation = false) {
+function showRegions(forStation) {
   loadData(() => {
     document.getElementById("title").innerText = "Select Region";
     const regions = Object.keys(cache);
+
     renderGrid(regions, r => {
       selectedRegion = r;
       if (forStation) showStations(r);
@@ -147,23 +148,31 @@ function showRegions(forStation = false) {
 // ===== STATIONS =====
 function showStations(region) {
   const stations = Object.keys(cache[region]);
+
   document.getElementById("title").innerText = "Select Station";
-  renderGrid(stations, s => loadStation(region, s));
+
+  renderGrid(stations, s => {
+    selectedStation = s;
+    loadStation(region, s);
+  });
 }
 
 // ===== REGION =====
 function loadRegion(region) {
   document.getElementById("title").innerText = "Region " + region;
-  const totals = getTotals(cache[region]);
+
+  const totals = getTotals({ [region]: cache[region] });
+
   renderAll(totals);
 }
 
 // ===== STATION =====
 function loadStation(region, station) {
   document.getElementById("title").innerText = "Station " + station;
-  const totals = new Array(20).fill(0);
 
+  const totals = new Array(20).fill(0);
   const parties = cache[region][station].parties;
+
   for (let p in parties) {
     totals[p] = parties[p];
   }
@@ -171,10 +180,12 @@ function loadStation(region, station) {
   renderAll(totals);
 }
 
-// ===== TOP PICK =====
+// ===== TOP =====
 function showTopPicker() {
   document.getElementById("title").innerText = "Select Top N";
+
   const nums = Array.from({length: 19}, (_, i) => i + 1);
+
   renderGrid(nums, n => {
     selectedTopN = n;
     applyTop();
@@ -187,9 +198,9 @@ function applyTop() {
     let totals;
 
     if (selectedRegion && selectedStation) {
-      totals = getTotals({ [selectedStation]: cache[selectedRegion][selectedStation] });
+      totals = getTotals({ [selectedRegion]: { [selectedStation]: cache[selectedRegion][selectedStation] } });
     } else if (selectedRegion) {
-      totals = getTotals(cache[selectedRegion]);
+      totals = getTotals({ [selectedRegion]: cache[selectedRegion] });
     } else {
       totals = getTotals(cache);
     }
@@ -202,14 +213,23 @@ function applyTop() {
 function getTotals(data) {
   const totals = new Array(20).fill(0);
 
-  for (let region in data) {
-    for (let station in data[region]) {
-      const parties = data[region][station].parties;
-      for (let p in parties) {
-        totals[p] += parties[p];
+  for (let key in data) {
+    const item = data[key];
+
+    if (item.parties === undefined) {
+      for (let station in item) {
+        const parties = item[station].parties || {};
+        for (let p in parties) {
+          totals[p] += parties[p];
+        }
+      }
+    } else {
+      for (let p in item.parties) {
+        totals[p] += item.parties[p];
       }
     }
   }
+
   return totals;
 }
 
@@ -226,7 +246,7 @@ function renderGrid(items, onClick) {
   });
 }
 
-// ===== RENDER ALL =====
+// ===== RENDER =====
 function renderAll(totals) {
   let rows = [];
 
