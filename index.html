@@ -4,13 +4,26 @@
   <title>Votes Admin</title>
 
   <style>
-    body {
+    html, body {
+      height: 100%;
+      margin: 0;
       font-family: Arial;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
       padding: 20px;
+      box-sizing: border-box;
+    }
+
+    #controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
     }
 
     button {
-      margin: 5px;
       padding: 8px 12px;
       cursor: pointer;
     }
@@ -24,20 +37,22 @@
       display: none;
     }
 
-    /* ===== CUSTOM CHART ===== */
+    /* ===== CHART FULL HEIGHT ===== */
     #chartWrap {
+      flex: 1;
       display: flex;
       align-items: flex-end;
       gap: 12px;
-      height: 320px;
-      margin-top: 20px;
+      padding: 10px;
     }
 
     .partyCol {
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: flex-end;
       width: 70px;
+      height: 100%;
       font-size: 12px;
     }
 
@@ -61,13 +76,12 @@
 
 <h2 id="title">Votes</h2>
 
-<button onclick="setMode('ALL')">ALL</button>
-<button onclick="setMode('TOP')">TOP</button>
-
-<br><br>
-
-<button onclick="setDisplay('LIST')">LIST</button>
-<button onclick="setDisplay('CHART')">CHART</button>
+<div id="controls">
+  <button onclick="setMode('ALL')">ALL</button>
+  <button onclick="setMode('TOP')">TOP</button>
+  <button onclick="setDisplay('LIST')">LIST</button>
+  <button onclick="setDisplay('CHART')">CHART</button>
+</div>
 
 <hr>
 
@@ -90,26 +104,26 @@ const db = firebase.database();
 
 const VERSION = "3333";
 
-// ===== PARTIES =====
+// ===== PARTIES (use your local files like "2.png") =====
 const parties = [
   { id:1, short:"ՔՊ", logo:"1.png"},
   { id:2, short:"ԲՀԿ", logo:"2.png"},
   { id:3, short:"ՀՇ", logo:"3.png"},
   { id:4, short:"Դեմ", logo:"4.png"},
-  { id:5, short:"Ուժեղ", logo:"5.jpg"},
-  { id:6, short:"ԺՀԿ", logo:"6.jpg"},
+  { id:5, short:"Ուժեղ", logo:"5.png"},
+  { id:6, short:"ԺՀԿ", logo:"6.png"},
   { id:7, short:"Միասն.", logo:"7.png"},
-  { id:8, short:"ԼՀԿ", logo:"8.jpg"},
-  { id:9, short:"ԱԺԲ", logo:"9.jpg"},
+  { id:8, short:"ԼՀԿ", logo:"8.png"},
+  { id:9, short:"ԱԺԲ", logo:"9.png"},
   { id:10, short:"Հայաստան", logo:"10.png"},
-  { id:11, short:"Քրիստոնեա", logo:"11.png"},
-  { id:12, short:"ՀԱԿ", logo:"12.jpg"},
-  { id:13, short:"ՆորՈւժ", logo:"13.jpg"},
-  { id:14, short:"Հանրապետ.", logo:"14.png"},
+  { id:11, short:"Քրիստ.", logo:"11.png"},
+  { id:12, short:"ՀԱԿ", logo:"12.png"},
+  { id:13, short:"ՆորՈւժ", logo:"13.png"},
+  { id:14, short:"Հանր.", logo:"14.png"},
   { id:15, short:"Ալյանս", logo:"15.png"},
-  { id:16, short:"Ռեֆորմ", logo:"16.jpg"},
-  { id:17, short:"ԴՕԿ", logo:"17.jpg"},
-  { id:18, short:"Քոչարի", logo:"18.jpg"},
+  { id:16, short:"Ռեֆորմ", logo:"16.png"},
+  { id:17, short:"ԴՕԿ", logo:"17.png"},
+  { id:18, short:"Քոչ.", logo:"18.png"},
   { id:19, short:"Հանուն", logo:"19.png"}
 ];
 
@@ -164,6 +178,10 @@ function setMode(m) {
       calculateAll();
     });
   }
+  if (m === "ALL") {
+    selectedTopN = null;
+    calculateAll();
+  }
 }
 
 // ===== GRID =====
@@ -207,7 +225,7 @@ function renderList(rows) {
   });
 }
 
-// ===== CUSTOM CHART =====
+// ===== CHART =====
 function renderChart(rows) {
   const wrap = document.getElementById("chartWrap");
   wrap.innerHTML = "";
@@ -225,9 +243,9 @@ function renderChart(rows) {
     col.innerHTML = `
       <div>${percent}%</div>
       <div>${r.votes}</div>
-      <div class="bar" style="height:${(r.votes / maxVotes * 150)}px;background:${getColorByPartyId(r.id)}"></div>
+      <div class="bar" style="height:${(r.votes / maxVotes * 100)}%;background:${getColorByPartyId(r.id)}"></div>
       <div>${party.short || "-"}</div>
-      <img class="logo" src="${party.logo || ''}" onerror="this.src='https://via.placeholder.com/40?text=?'">
+      <img class="logo" src="${party.logo || ''}" onerror="this.onerror=null;this.src='placeholder.png';">
       <div>${r.id}</div>
     `;
 
