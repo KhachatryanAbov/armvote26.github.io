@@ -1,33 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Votes Admin</title>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    button { margin: 5px; padding: 8px 12px; }
+    #grid button { display: inline-block; }
+  </style>
+</head>
+<body>
+
+<h2 id="title">Votes</h2>
+
+<!-- TOP BUTTONS -->
+<button onclick="loadAll()">ALL</button>
+<button onclick="showRegions()">REGION</button>
+
+<!-- GRID (regions / stations) -->
+<div id="grid"></div>
+
+<hr>
+
+<!-- RESULTS -->
+<div id="list"></div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "parlo1-28056.firebaseapp.com",
+  databaseURL: "https://parlo1-28056-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "parlo1-28056"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
 const VERSION = "3333";
 
-const ref = db.ref("votes/" + VERSION);
+// =====================
+// LOAD ALL (like showAllCombined)
+// =====================
+function loadAll() {
+  document.getElementById("title").innerText = "ALL";
 
-ref.once("value").then(snapshot => {
-  const data = snapshot.val();
+  db.ref("votes/" + VERSION).once("value").then(snapshot => {
+    const data = snapshot.val();
+    const totals = new Array(20).fill(0);
 
-  const totals = new Array(20).fill(0);
+    for (let region in data) {
+      for (let station in data[region]) {
+        const parties = data[region][station].parties;
 
-  for (let region in data) {
-    for (let station in data[region]) {
-      const parties = data[region][station].parties;
-
-      for (let p in parties) {
-        const id = parseInt(p);
-        if (id >= 1 && id <= 19) {
-          totals[id] += parties[p];
+        for (let p in parties) {
+          const id = parseInt(p);
+          if (id >= 1 && id <= 19) {
+            totals[id] += parties[p];
+          }
         }
       }
     }
-  }
 
-  showList(totals);
-});
+    renderList(totals);
+  });
+}
 
-function showList(totals) {
-  const el = document.getElementById("data");
-  el.innerHTML = "";
+// =====================
+// SHOW REGIONS (like GridAdapter)
+// =====================
+function showRegions() {
+  document.getElementById("title").innerText = "Select Region";
+
+  db.ref("votes/" + VERSION).once("value").then(snapshot => {
+    const data = snapshot.val();
+    const regions = Object.keys(data);
+
+    renderGrid(regions, "region");
+  });
+}
+
+// =====================
+// LOAD REGION (like showRegion)
+// =====================
+function loadRegion(regionId) {
+  document.getElementById("title").innerText = "Region " + regionId;
+
+  db.ref("votes/" + VERSION + "/" + regionId)
+    .once("value")
+    .then(snapshot => {
+      const data = snapshot.val();
+      const totals = new Array(20).fill(0);
+
+      for (let station in data) {
+        const parties = data[station].parties;
+
+        for (let p in parties) {
+          const id = parseInt(p);
+          if (id >= 1 && id <= 19) {
+            totals[id] += parties[p];
+          }
+        }
+      }
+
+      renderList(totals);
+    });
+}
+
+// =====================
+// GRID UI (like RecyclerView grid)
+// =====================
+function renderGrid(items, type) {
+  const grid = document.getElementById("grid");
+  grid.innerHTML = "";
+
+  items.forEach(item => {
+    const btn = document.createElement("button");
+
+    if (type === "region") {
+      btn.innerText = "Region " + item;
+      btn.onclick = () => loadRegion(item);
+    }
+
+    grid.appendChild(btn);
+  });
+}
+
+// =====================
+// LIST UI (like RecyclerView)
+// =====================
+function renderList(totals) {
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+
+  const rows = [];
 
   for (let i = 1; i <= 19; i++) {
-    el.innerHTML += "Party " + i + ": " + totals[i] + "<br>";
+    rows.push({ id: i, votes: totals[i] });
   }
+
+  rows.sort((a, b) => b.votes - a.votes);
+
+  rows.forEach(r => {
+    const div = document.createElement("div");
+    div.innerText = "Party " + r.id + ": " + r.votes;
+    list.appendChild(div);
+  });
 }
+
+// AUTO LOAD ALL ON START
+loadAll();
+
+</script>
+
+</body>
+</html>
