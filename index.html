@@ -2,27 +2,43 @@
 <html>
 <head>
   <title>Votes Admin</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <style>
     body { font-family: Arial; padding: 20px; }
-    button { margin: 5px; padding: 8px 12px; }
-    #grid button { display: inline-block; }
+    button { margin: 5px; padding: 8px 12px; cursor: pointer; }
+    #grid button { width: 80px; margin: 4px; }
+    .hidden { display: none; }
   </style>
 </head>
 <body>
 
 <h2 id="title">Votes</h2>
 
-<!-- TOP BUTTONS -->
-<button onclick="loadAll()">ALL</button>
-<button onclick="showRegions()">REGION</button>
+<!-- MODE BUTTONS -->
+<button onclick="setMode('ALL')">ALL</button>
+<button onclick="setMode('REGION')">REGION</button>
+<button onclick="setMode('STATION')">STATION</button>
+<button onclick="setMode('TOP')">TOP</button>
 
-<!-- GRID (regions / stations) -->
-<div id="grid"></div>
+<br><br>
+
+<!-- DISPLAY SWITCH -->
+<button onclick="setDisplay('LIST')">LIST</button>
+<button onclick="setDisplay('CHART')">BAR</button>
+<button onclick="setDisplay('ROUND')">PIE</button>
 
 <hr>
 
-<!-- RESULTS -->
+<!-- GRID -->
+<div id="grid"></div>
+
+<!-- LIST -->
 <div id="list"></div>
+
+<!-- CHART -->
+<canvas id="barChart" class="hidden"></canvas>
+<canvas id="pieChart" class="hidden"></canvas>
 
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -33,7 +49,6 @@ const firebaseConfig = {
   apiKey: "AIzaSy...",
   authDomain: "parlo1-28056.firebaseapp.com",
   databaseURL: "https://parlo1-28056-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "parlo1-28056"
 };
 
 firebase.initializeApp(firebaseConfig);
@@ -41,116 +56,230 @@ const db = firebase.database();
 
 const VERSION = "3333";
 
-// =====================
-// LOAD ALL (like showAllCombined)
-// =====================
+// ===== STATE (like Fragment) =====
+let mode = "ALL";
+let display = "LIST";
+let selectedRegion = null;
+let selectedStation = null;
+let selectedTopN = null;
+let cache = null;
+
+// ===== PARTY NAMES =====
+const partyNames = {
+  1: "Քաղաքացիական պայմանագիր",
+  2: "Բարգավաճ Հայաստան",
+  3: "Հայաստանի Շնորհապետական",
+  4: "Բոլորին դեմ եմ",
+  5: "Ուժեղ Հայաստան",
+  6: "Ժողովրդավարական համախմբում",
+  7: "Միասնության թևեր",
+  8: "Լուսավոր Հայաստան",
+  9: "Ազգային ժողովրդավարական բևեռ",
+  10: "Հայաստան",
+  11: "Քրիստոնեա-ժողովրդավարական",
+  12: "Հայ ազգային կոնգրես",
+  13: "Նոր ուժ",
+  14: "Հանրապետություն",
+  15: "Ալյանս",
+  16: "Ռեֆորմիստների",
+  17: "Դեմոկրատիա",
+  18: "Քոչարի վերածնունդ",
+  19: "Ժողովրդավարության պաշտպաններ"
+};
+
+// ===== LOAD CACHE =====
+function loadData(callback) {
+  if (cache) return callback();
+
+  db.ref("votes/" + VERSION).once("value").then(snap => {
+    cache = snap.val();
+    callback();
+  });
+}
+
+// ===== MODE SWITCH =====
+function setMode(m) {
+  mode = m;
+  selectedRegion = null;
+  selectedStation = null;
+
+  if (m === "ALL") loadAll();
+  if (m === "REGION") showRegions();
+  if (m === "STATION") showRegions(true);
+  if (m === "TOP") showTopPicker();
+}
+
+// ===== DISPLAY SWITCH =====
+function setDisplay(d) {
+  display = d;
+
+  document.getElementById("list").classList.add("hidden");
+  document.getElementById("barChart").classList.add("hidden");
+  document.getElementById("pieChart").classList.add("hidden");
+
+  if (d === "LIST") document.getElementById("list").classList.remove("hidden");
+  if (d === "CHART") document.getElementById("barChart").classList.remove("hidden");
+  if (d === "ROUND") document.getElementById("pieChart").classList.remove("hidden");
+}
+
+// ===== ALL =====
 function loadAll() {
-  document.getElementById("title").innerText = "ALL";
+  loadData(() => {
+    document.getElementById("title").innerText = "ALL";
+    const totals = getTotals(cache);
+    renderAll(totals);
+  });
+}
 
-  db.ref("votes/" + VERSION).once("value").then(snapshot => {
-    const data = snapshot.val();
-    const totals = new Array(20).fill(0);
+// ===== REGIONS =====
+function showRegions(forStation = false) {
+  loadData(() => {
+    document.getElementById("title").innerText = "Select Region";
+    const regions = Object.keys(cache);
+    renderGrid(regions, r => {
+      selectedRegion = r;
+      if (forStation) showStations(r);
+      else loadRegion(r);
+    });
+  });
+}
 
-    for (let region in data) {
-      for (let station in data[region]) {
-        const parties = data[region][station].parties;
+// ===== STATIONS =====
+function showStations(region) {
+  const stations = Object.keys(cache[region]);
+  document.getElementById("title").innerText = "Select Station";
+  renderGrid(stations, s => loadStation(region, s));
+}
 
-        for (let p in parties) {
-          const id = parseInt(p);
-          if (id >= 1 && id <= 19) {
-            totals[id] += parties[p];
-          }
-        }
-      }
+// ===== REGION =====
+function loadRegion(region) {
+  document.getElementById("title").innerText = "Region " + region;
+  const totals = getTotals(cache[region]);
+  renderAll(totals);
+}
+
+// ===== STATION =====
+function loadStation(region, station) {
+  document.getElementById("title").innerText = "Station " + station;
+  const totals = new Array(20).fill(0);
+
+  const parties = cache[region][station].parties;
+  for (let p in parties) {
+    totals[p] = parties[p];
+  }
+
+  renderAll(totals);
+}
+
+// ===== TOP PICK =====
+function showTopPicker() {
+  document.getElementById("title").innerText = "Select Top N";
+  const nums = Array.from({length: 19}, (_, i) => i + 1);
+  renderGrid(nums, n => {
+    selectedTopN = n;
+    applyTop();
+  });
+}
+
+// ===== APPLY TOP =====
+function applyTop() {
+  loadData(() => {
+    let totals;
+
+    if (selectedRegion && selectedStation) {
+      totals = getTotals({ [selectedStation]: cache[selectedRegion][selectedStation] });
+    } else if (selectedRegion) {
+      totals = getTotals(cache[selectedRegion]);
+    } else {
+      totals = getTotals(cache);
     }
 
-    renderList(totals);
+    renderAll(totals);
   });
 }
 
-// =====================
-// SHOW REGIONS (like GridAdapter)
-// =====================
-function showRegions() {
-  document.getElementById("title").innerText = "Select Region";
+// ===== TOTALS =====
+function getTotals(data) {
+  const totals = new Array(20).fill(0);
 
-  db.ref("votes/" + VERSION).once("value").then(snapshot => {
-    const data = snapshot.val();
-    const regions = Object.keys(data);
-
-    renderGrid(regions, "region");
-  });
-}
-
-// =====================
-// LOAD REGION (like showRegion)
-// =====================
-function loadRegion(regionId) {
-  document.getElementById("title").innerText = "Region " + regionId;
-
-  db.ref("votes/" + VERSION + "/" + regionId)
-    .once("value")
-    .then(snapshot => {
-      const data = snapshot.val();
-      const totals = new Array(20).fill(0);
-
-      for (let station in data) {
-        const parties = data[station].parties;
-
-        for (let p in parties) {
-          const id = parseInt(p);
-          if (id >= 1 && id <= 19) {
-            totals[id] += parties[p];
-          }
-        }
+  for (let region in data) {
+    for (let station in data[region]) {
+      const parties = data[region][station].parties;
+      for (let p in parties) {
+        totals[p] += parties[p];
       }
-
-      renderList(totals);
-    });
+    }
+  }
+  return totals;
 }
 
-// =====================
-// GRID UI (like RecyclerView grid)
-// =====================
-function renderGrid(items, type) {
+// ===== GRID =====
+function renderGrid(items, onClick) {
   const grid = document.getElementById("grid");
   grid.innerHTML = "";
 
-  items.forEach(item => {
+  items.forEach(i => {
     const btn = document.createElement("button");
-
-    if (type === "region") {
-      btn.innerText = "Region " + item;
-      btn.onclick = () => loadRegion(item);
-    }
-
+    btn.innerText = i;
+    btn.onclick = () => onClick(i);
     grid.appendChild(btn);
   });
 }
 
-// =====================
-// LIST UI (like RecyclerView)
-// =====================
-function renderList(totals) {
+// ===== RENDER ALL =====
+function renderAll(totals) {
+  let rows = [];
+
+  for (let i = 1; i <= 19; i++) {
+    rows.push({
+      id: i,
+      name: partyNames[i] || ("Party " + i),
+      votes: totals[i]
+    });
+  }
+
+  rows.sort((a,b)=>b.votes-a.votes);
+
+  if (selectedTopN) rows = rows.slice(0, selectedTopN);
+
+  renderList(rows);
+  renderCharts(rows);
+}
+
+// ===== LIST =====
+function renderList(rows) {
   const list = document.getElementById("list");
   list.innerHTML = "";
 
-  const rows = [];
-
-  for (let i = 1; i <= 19; i++) {
-    rows.push({ id: i, votes: totals[i] });
-  }
-
-  rows.sort((a, b) => b.votes - a.votes);
-
   rows.forEach(r => {
     const div = document.createElement("div");
-    div.innerText = "Party " + r.id + ": " + r.votes;
+    div.innerText = `${r.id}. ${r.name} → ${r.votes}`;
     list.appendChild(div);
   });
 }
 
-// AUTO LOAD ALL ON START
+// ===== CHARTS =====
+let barChart, pieChart;
+
+function renderCharts(rows) {
+  const labels = rows.map(r => r.id);
+  const data = rows.map(r => r.votes);
+
+  if (barChart) barChart.destroy();
+  if (pieChart) pieChart.destroy();
+
+  barChart = new Chart(document.getElementById("barChart"), {
+    type: 'bar',
+    data: { labels, datasets: [{ data }] }
+  });
+
+  pieChart = new Chart(document.getElementById("pieChart"), {
+    type: 'pie',
+    data: { labels, datasets: [{ data }] }
+  });
+}
+
+// ===== START =====
 loadAll();
 
 </script>
