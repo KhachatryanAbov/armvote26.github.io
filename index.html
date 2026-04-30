@@ -27,7 +27,7 @@
   firebase.initializeApp(firebaseConfig);
 
   const db = firebase.database();
-  const ref = db.ref("test");
+  const ref = db.ref("votes");
 
   ref.on("value", (snapshot) => {
     document.getElementById("data").innerText = snapshot.val();
