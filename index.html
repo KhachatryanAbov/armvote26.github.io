@@ -1,37 +1,63 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Firebase Test</title>
+  <title>Votes Admin</title>
 </head>
 <body>
 
-<h1>Firebase Data</h1>
-<p id="data">Loading...</p>
+<h2>Votes (ALL)</h2>
+<button onclick="loadAll()">Load All</button>
 
-<!-- Firebase (compat version) -->
+<ul id="list"></ul>
+
+<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
 <script>
-  const firebaseConfig = {
-    apiKey: "AIzaSyDqm9fTYhGRRulItZmz2cUa1HkzWpjJD74",
-    authDomain: "parlo1-28056.firebaseapp.com",
-    databaseURL: "https://parlo1-28056-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "parlo1-28056",
-    storageBucket: "parlo1-28056.firebasestorage.app",
-    messagingSenderId: "603971714200",
-    appId: "1:603971714200:web:933d4204a84c88569124ed"
-  };
+const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "parlo1-28056.firebaseapp.com",
+  databaseURL: "https://parlo1-28056-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "parlo1-28056"
+};
 
-  // Initialize Firebase
-  firebase.initializeApp(firebaseConfig);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
-  const db = firebase.database();
-  const ref = db.ref("votes");
+const VERSION = "3333"; // 👈 your version
 
-  ref.on("value", (snapshot) => {
-    document.getElementById("data").innerText = snapshot.val();
+function loadAll() {
+  db.ref("votes/" + VERSION).once("value").then(snapshot => {
+    const data = snapshot.val();
+    const totals = new Array(20).fill(0);
+
+    for (let region in data) {
+      for (let station in data[region]) {
+        const parties = data[region][station].parties;
+        for (let p in parties) {
+          const id = parseInt(p);
+          if (id >= 1 && id <= 19) {
+            totals[id] += parties[p];
+          }
+        }
+      }
+    }
+
+    renderList(totals);
   });
+}
+
+function renderList(totals) {
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+
+  for (let i = 1; i <= 19; i++) {
+    const li = document.createElement("li");
+    li.innerText = "Party " + i + ": " + totals[i];
+    list.appendChild(li);
+  }
+}
 </script>
 
 </body>
