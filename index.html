@@ -126,7 +126,22 @@ function setDisplay(d) {
 function loadAll() {
   loadData(() => {
     document.getElementById("title").innerText = "ALL";
-    const totals = getTotals(cache);
+
+    const totals = new Array(20).fill(0);
+
+    for (let region in cache) {
+      for (let station in cache[region]) {
+        const parties = cache[region][station].parties || {};
+
+        for (let p in parties) {
+          const id = parseInt(p);
+          if (id >= 1 && id <= 19) {
+            totals[id] += parties[p];
+          }
+        }
+      }
+    }
+
     renderAll(totals);
   });
 }
@@ -161,7 +176,21 @@ function showStations(region) {
 function loadRegion(region) {
   document.getElementById("title").innerText = "Region " + region;
 
-  const totals = getTotals({ [region]: cache[region] });
+  const totals = new Array(20).fill(0);
+
+  const regionData = cache[region];
+
+  for (let stationId in regionData) {
+    const station = regionData[stationId];
+    const parties = station.parties || {};
+
+    for (let p in parties) {
+      const id = parseInt(p);
+      if (id >= 1 && id <= 19) {
+        totals[id] += parties[p];
+      }
+    }
+  }
 
   renderAll(totals);
 }
