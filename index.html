@@ -211,6 +211,16 @@ function renderAll(totals) {
   renderChart(rows);
 }
 
+  function getColorByPartyId(id) {
+  const palette = [
+    "#FFA726", "#66BB6A", "#42A5F5", "#AB47BC",
+    "#FF7043", "#26C6DA", "#D4E157", "#8D6E63",
+    "#EC407A", "#78909C"
+  ];
+
+  return palette[(id - 1) % palette.length];
+}
+
 // ===== LIST =====
 function renderList(rows) {
   const list = document.getElementById("list");
@@ -226,16 +236,28 @@ function renderList(rows) {
 let barChart;
 
 function renderChart(rows) {
-  const labels = rows.map(r=>r.id);
-  const data = rows.map(r=>r.votes);
-  const colors = getColors(rows.length);
+  const labels = rows.map(r => r.id);
+  const data = rows.map(r => r.votes);
+
+  // 👇 KEY FIX: color based on party ID
+  const colors = rows.map(r => getColorByPartyId(r.id));
 
   if (barChart) barChart.destroy();
 
   barChart = new Chart(document.getElementById("barChart"), {
     type: 'bar',
-    data: { labels, datasets: [{ data, backgroundColor: colors }] },
-    options: { plugins: { legend: { display: false } } }
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colors
+      }]
+    },
+    options: {
+      plugins: {
+        legend: { display: false }
+      }
+    }
   });
 }
 
