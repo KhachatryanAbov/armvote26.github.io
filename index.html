@@ -1,64 +1,33 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Votes Admin</title>
-</head>
-<body>
+const VERSION = "3333";
 
-<h2>Votes (ALL)</h2>
-<button onclick="loadAll()">Load All</button>
+const ref = db.ref("votes/" + VERSION);
 
-<ul id="list"></ul>
+ref.once("value").then(snapshot => {
+  const data = snapshot.val();
 
-<!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  const totals = new Array(20).fill(0);
 
-<script>
-const firebaseConfig = {
-  apiKey: "AIzaSy...",
-  authDomain: "parlo1-28056.firebaseapp.com",
-  databaseURL: "https://parlo1-28056-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "parlo1-28056"
-};
+  for (let region in data) {
+    for (let station in data[region]) {
+      const parties = data[region][station].parties;
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-
-const VERSION = "3333"; // 👈 your version
-
-function loadAll() {
-  db.ref("votes/" + VERSION).once("value").then(snapshot => {
-    const data = snapshot.val();
-    const totals = new Array(20).fill(0);
-
-    for (let region in data) {
-      for (let station in data[region]) {
-        const parties = data[region][station].parties;
-        for (let p in parties) {
-          const id = parseInt(p);
-          if (id >= 1 && id <= 19) {
-            totals[id] += parties[p];
-          }
+      for (let p in parties) {
+        const id = parseInt(p);
+        if (id >= 1 && id <= 19) {
+          totals[id] += parties[p];
         }
       }
     }
+  }
 
-    renderList(totals);
-  });
-}
+  showList(totals);
+});
 
-function renderList(totals) {
-  const list = document.getElementById("list");
-  list.innerHTML = "";
+function showList(totals) {
+  const el = document.getElementById("data");
+  el.innerHTML = "";
 
   for (let i = 1; i <= 19; i++) {
-    const li = document.createElement("li");
-    li.innerText = "Party " + i + ": " + totals[i];
-    list.appendChild(li);
+    el.innerHTML += "Party " + i + ": " + totals[i] + "<br>";
   }
 }
-</script>
-
-</body>
-</html>
