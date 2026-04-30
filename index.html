@@ -1,14 +1,38 @@
-
 <!DOCTYPE html>
 <html>
 <head>
-  <title>My First Firebase Web App</title>
+  <title>Firebase Test</title>
 </head>
 <body>
 
-<h1>Hello from GitHub Pages 🚀</h1>
-
+<h1>Firebase Data</h1>
 <p id="data">Loading...</p>
+
+<!-- Firebase (compat version) -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyDqm9fTYhGRRulItZmz2cUa1HkzWpjJD74",
+    authDomain: "parlo1-28056.firebaseapp.com",
+    databaseURL: "https://parlo1-28056-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "parlo1-28056",
+    storageBucket: "parlo1-28056.firebasestorage.app",
+    messagingSenderId: "603971714200",
+    appId: "1:603971714200:web:933d4204a84c88569124ed"
+  };
+
+  // Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+
+  const db = firebase.database();
+  const ref = db.ref("test");
+
+  ref.on("value", (snapshot) => {
+    document.getElementById("data").innerText = snapshot.val();
+  });
+</script>
 
 </body>
 </html>
