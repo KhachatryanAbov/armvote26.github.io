@@ -3,6 +3,7 @@
 <head>
   <title>Votes Admin</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 
   <style>
     body { font-family: Arial; padding: 20px; }
@@ -238,8 +239,6 @@ let barChart;
 function renderChart(rows) {
   const labels = rows.map(r => r.id);
   const data = rows.map(r => r.votes);
-
-  // 👇 KEY FIX: color based on party ID
   const colors = rows.map(r => getColorByPartyId(r.id));
 
   if (barChart) barChart.destroy();
@@ -255,9 +254,26 @@ function renderChart(rows) {
     },
     options: {
       plugins: {
-        legend: { display: false }
+        legend: { display: false },
+
+        // 👇 THIS is the important part
+        datalabels: {
+          anchor: 'end',
+          align: 'top',
+          color: '#111',
+          font: {
+            weight: 'bold',
+            size: 12
+          },
+          formatter: function(value, ctx) {
+  const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
+  const percent = total ? ((value / total) * 100).toFixed(1) : 0;
+  return value + " (" + percent + "%)";
+}
+        }
       }
-    }
+    },
+    plugins: [ChartDataLabels] // 👈 enable plugin
   });
 }
 
