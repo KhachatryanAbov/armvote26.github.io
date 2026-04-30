@@ -15,7 +15,6 @@
 
 <h2 id="title">Votes</h2>
 
-<!-- MODE BUTTONS -->
 <button onclick="setMode('ALL')">ALL</button>
 <button onclick="setMode('REGION')">REGION</button>
 <button onclick="setMode('STATION')">STATION</button>
@@ -23,23 +22,15 @@
 
 <br><br>
 
-<!-- DISPLAY SWITCH -->
 <button onclick="setDisplay('LIST')">LIST</button>
 <button onclick="setDisplay('CHART')">BAR</button>
-<button onclick="setDisplay('ROUND')">PIE</button>
 
 <hr>
 
-<!-- GRID -->
 <div id="grid"></div>
-
-<!-- LIST -->
 <div id="list"></div>
-
-<!-- CHARTS -->
 <canvas id="barChart" class="hidden"></canvas>
 
-<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
@@ -56,63 +47,34 @@ const db = firebase.database();
 const VERSION = "3333";
 
 // ===== STATE =====
-let mode = "ALL";
 let display = "LIST";
 let selectedRegion = null;
 let selectedStation = null;
 let selectedTopN = null;
 let cache = null;
 
-// ===== PARTY NAMES =====
-const partyNames = {
-  1: "Քաղաքացիական պայմանագիր",
-  2: "Բարգավաճ Հայաստան",
-  3: "Հայաստանի Շնորհապետական",
-  4: "Բոլորին դեմ եմ",
-  5: "Ուժեղ Հայաստան",
-  6: "Ժողովրդավարական համախմբում",
-  7: "Միասնության թևեր",
-  8: "Լուսավոր Հայաստան",
-  9: "Ազգային ժողովրդավարական բևեռ",
-  10: "Հայաստան",
-  11: "Քրիստոնեա-ժողովրդավարական",
-  12: "Հայ ազգային կոնգրես",
-  13: "Նոր ուժ",
-  14: "Հանրապետություն",
-  15: "Ալյանս",
-  16: "Ռեֆորմիստների",
-  17: "Դեմոկրատիա",
-  18: "Քոչարի վերածնունդ",
-  19: "Ժողովրդավարության պաշտպաններ"
-};
+let currentScope = { type: "ALL" };
+let dbRef = null;
 
-  function getColors(count) {
-  const base = [
-    "#FFA726", "#66BB6A", "#42A5F5", "#AB47BC",
-    "#FF7043", "#26C6DA", "#D4E157", "#8D6E63",
-    "#EC407A", "#78909C"
-  ];
-
-  const colors = [];
-  for (let i = 0; i < count; i++) {
-    colors.push(base[i % base.length]);
-  }
-  return colors;
+// ===== COLORS =====
+function getColors(count) {
+  const base = ["#FFA726","#66BB6A","#42A5F5","#AB47BC","#FF7043","#26C6DA","#D4E157","#8D6E63","#EC407A","#78909C"];
+  return Array.from({length: count}, (_, i) => base[i % base.length]);
 }
 
-// ===== LOAD DATA =====
-function loadData(callback) {
-  if (cache) return callback();
+// ===== LIVE UPDATES =====
+function startLiveUpdates() {
+  dbRef = db.ref("votes/" + VERSION);
 
-  db.ref("votes/" + VERSION).once("value").then(snap => {
-    cache = snap.val();
-    callback();
+  dbRef.on("value", (snapshot) => {
+    cache = snapshot.val() || {};
+    console.log("🔥 Live update");
+    refreshCurrentView();
   });
 }
 
 // ===== MODE =====
 function setMode(m) {
-  mode = m;
   selectedRegion = null;
   selectedStation = null;
 
@@ -125,99 +87,90 @@ function setMode(m) {
 // ===== DISPLAY =====
 function setDisplay(d) {
   display = d;
-
   document.getElementById("list").classList.add("hidden");
   document.getElementById("barChart").classList.add("hidden");
-  document.getElementById("pieChart").classList.add("hidden");
 
   if (d === "LIST") document.getElementById("list").classList.remove("hidden");
   if (d === "CHART") document.getElementById("barChart").classList.remove("hidden");
-  if (d === "ROUND") document.getElementById("pieChart").classList.remove("hidden");
+}
+
+// ===== REFRESH (LIKE ANDROID) =====
+function refreshCurrentView() {
+  if (!cache) return;
+
+  if (currentScope.type === "ALL") calculateAll();
+  if (currentScope.type === "REGION") calculateRegion(currentScope.region);
+  if (currentScope.type === "STATION") calculateStation(currentScope.region, currentScope.station);
 }
 
 // ===== ALL =====
 function loadAll() {
-  loadData(() => {
-    document.getElementById("title").innerText = "ALL";
-
-    const totals = new Array(20).fill(0);
-
-    for (let region in cache) {
-      for (let station in cache[region]) {
-        const parties = cache[region][station].parties || {};
-
-        for (let p in parties) {
-          const id = parseInt(p);
-          if (id >= 1 && id <= 19) {
-            totals[id] += parties[p];
-          }
-        }
-      }
-    }
-
-    renderAll(totals);
-  });
+  document.getElementById("title").innerText = "ALL";
+  currentScope = { type: "ALL" };
+  calculateAll();
 }
 
-// ===== REGIONS =====
-function showRegions(forStation) {
-  loadData(() => {
-    document.getElementById("title").innerText = "Select Region";
-    const regions = Object.keys(cache);
-
-    renderGrid(regions, r => {
-      selectedRegion = r;
-      if (forStation) showStations(r);
-      else loadRegion(r);
-    });
-  });
-}
-
-// ===== STATIONS =====
-function showStations(region) {
-  const stations = Object.keys(cache[region]);
-
-  document.getElementById("title").innerText = "Select Station";
-
-  renderGrid(stations, s => {
-    selectedStation = s;
-    loadStation(region, s);
-  });
-}
-
-// ===== REGION =====
-function loadRegion(region) {
-  document.getElementById("title").innerText = "Region " + region;
-
+function calculateAll() {
   const totals = new Array(20).fill(0);
 
-  const regionData = cache[region];
-
-  for (let stationId in regionData) {
-    const station = regionData[stationId];
-    const parties = station.parties || {};
-
-    for (let p in parties) {
-      const id = parseInt(p);
-      if (id >= 1 && id <= 19) {
-        totals[id] += parties[p];
-      }
+  for (let r in cache) {
+    for (let s in cache[r]) {
+      const parties = cache[r][s].parties || {};
+      for (let p in parties) totals[p] += parties[p];
     }
   }
 
   renderAll(totals);
 }
 
+// ===== REGION =====
+function showRegions(forStation) {
+  document.getElementById("title").innerText = "Select Region";
+  renderGrid(Object.keys(cache), r => {
+    selectedRegion = r;
+    if (forStation) showStations(r);
+    else loadRegion(r);
+  });
+}
+
+function loadRegion(region) {
+  document.getElementById("title").innerText = "Region " + region;
+  currentScope = { type: "REGION", region };
+  calculateRegion(region);
+}
+
+function calculateRegion(region) {
+  const totals = new Array(20).fill(0);
+  const data = cache[region] || {};
+
+  for (let s in data) {
+    const parties = data[s].parties || {};
+    for (let p in parties) totals[p] += parties[p];
+  }
+
+  renderAll(totals);
+}
+
 // ===== STATION =====
+function showStations(region) {
+  document.getElementById("title").innerText = "Select Station";
+  renderGrid(Object.keys(cache[region]), s => {
+    selectedStation = s;
+    loadStation(region, s);
+  });
+}
+
 function loadStation(region, station) {
   document.getElementById("title").innerText = "Station " + station;
+  currentScope = { type: "STATION", region, station };
+  calculateStation(region, station);
+}
 
+function calculateStation(region, station) {
   const totals = new Array(20).fill(0);
-  const parties = cache[region][station].parties;
+  const parties = cache?.[region]?.[station]?.parties || {};
 
-  for (let p in parties) {
-    totals[p] = parties[p];
-  }
+  for (let p in parties) totals[p] = parties[p];
 
   renderAll(totals);
 }
@@ -225,61 +178,16 @@ function loadStation(region, station) {
 // ===== TOP =====
 function showTopPicker() {
   document.getElementById("title").innerText = "Select Top N";
-
-  const nums = Array.from({length: 19}, (_, i) => i + 1);
-
-  renderGrid(nums, n => {
+  renderGrid(Array.from({length:19},(_,i)=>i+1), n => {
     selectedTopN = n;
-    applyTop();
+    refreshCurrentView();
   });
-}
-
-// ===== APPLY TOP =====
-function applyTop() {
-  loadData(() => {
-    let totals;
-
-    if (selectedRegion && selectedStation) {
-      totals = getTotals({ [selectedRegion]: { [selectedStation]: cache[selectedRegion][selectedStation] } });
-    } else if (selectedRegion) {
-      totals = getTotals({ [selectedRegion]: cache[selectedRegion] });
-    } else {
-      totals = getTotals(cache);
-    }
-
-    renderAll(totals);
-  });
-}
-
-// ===== TOTALS =====
-function getTotals(data) {
-  const totals = new Array(20).fill(0);
-
-  for (let key in data) {
-    const item = data[key];
-
-    if (item.parties === undefined) {
-      for (let station in item) {
-        const parties = item[station].parties || {};
-        for (let p in parties) {
-          totals[p] += parties[p];
-        }
-      }
-    } else {
-      for (let p in item.parties) {
-        totals[p] += item.parties[p];
-      }
-    }
-  }
-
-  return totals;
 }
 
 // ===== GRID =====
 function renderGrid(items, onClick) {
   const grid = document.getElementById("grid");
   grid.innerHTML = "";
-
   items.forEach(i => {
     const btn = document.createElement("button");
     btn.innerText = i;
@@ -293,62 +201,46 @@ function renderAll(totals) {
   let rows = [];
 
   for (let i = 1; i <= 19; i++) {
-    rows.push({
-      id: i,
-      name: partyNames[i] || ("Party " + i),
-      votes: totals[i]
-    });
+    rows.push({ id: i, votes: totals[i] });
   }
 
   rows.sort((a,b)=>b.votes-a.votes);
-
   if (selectedTopN) rows = rows.slice(0, selectedTopN);
 
   renderList(rows);
-  renderCharts(rows);
+  renderChart(rows);
 }
 
 // ===== LIST =====
 function renderList(rows) {
   const list = document.getElementById("list");
   list.innerHTML = "";
-
   rows.forEach(r => {
     const div = document.createElement("div");
-    div.innerText = `${r.id}. ${r.name} → ${r.votes}`;
+    div.innerText = `Party ${r.id}: ${r.votes}`;
     list.appendChild(div);
   });
 }
 
-// ===== CHARTS =====
-let barChart, pieChart;
+// ===== CHART =====
+let barChart;
 
-function renderCharts(rows) {
-  const labels = rows.map(r => r.id);
-  const data = rows.map(r => r.votes);
+function renderChart(rows) {
+  const labels = rows.map(r=>r.id);
+  const data = rows.map(r=>r.votes);
   const colors = getColors(rows.length);
 
   if (barChart) barChart.destroy();
-  if (pieChart) pieChart.destroy();
 
-  // BAR CHART
   barChart = new Chart(document.getElementById("barChart"), {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        data,
-        backgroundColor: colors
-      }]
-    },
-    options: {
-      plugins: {
-        legend: { display: false }
-      }
-    }
+    data: { labels, datasets: [{ data, backgroundColor: colors }] },
+    options: { plugins: { legend: { display: false } } }
   });
+}
 
 // ===== START =====
+startLiveUpdates();
 loadAll();
 
 </script>
