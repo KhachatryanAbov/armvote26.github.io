@@ -47,6 +47,28 @@ const db = firebase.database();
 
 const VERSION = "3333";
 
+  const parties = [
+  { id: 1, name: "Քաղաքացիական պայմանագիր", logo: "https://upload.wikimedia.org/wikipedia/commons/6/6a/Logo_of_the_Civil_Contract_%28Armenia%29.svg" },
+  { id: 2, name: "Բարգավաճ Հայաստան", logo: "https://www.bhk.am/sites/default/files/BHK%20logo_0.png" },
+  { id: 3, name: "Հայաստանի Շնորհապետական", logo: "https://upload.wikimedia.org/wikipedia/commons/3/3f/MPALogo.jpg" },
+  { id: 4, name: "Բոլորին դեմ եմ", logo: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ3l-T4PLG67uEgDtSN73j8S8OOR81nuI27Fg&s" },
+  { id: 5, name: "Ուժեղ Հայաստան", logo: "https://armenpress.am/resized/480/storage/images/articles/2026/04/30/tThfqF3hyVoRBi6C0s2TpfC9jHRMf5a1tRduytwl.webp" },
+  { id: 6, name: "Ժողովրդավարական համախմբում", logo: "https://upload.wikimedia.org/wikipedia/commons/0/0c/DCP.2021.jpg" },
+  { id: 7, name: "Միասնության թևեր", logo: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRlfhsudHo-rvXsIK_gnczbjm464TiS-iYHqQ&s" },
+  { id: 8, name: "Լուսավոր Հայաստան", logo: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTlGBhk1R3JgVw1-ksI4tcrQAEdYgCOGflGJw&s" },
+  { id: 9, name: "Ազգային ժողովրդավարական բևեռ", logo: "https://upload.wikimedia.org/wikipedia/commons/2/2b/%D4%B1%D5%A6%D5%A3%D5%A1%D5%B5%D5%AB%D5%B6_%D5%A2%D6%87%D5%A5%D5%BC.jpg" },
+  { id: 10, name: "Հայաստան", logo: "https://upload.wikimedia.org/wikipedia/commons/5/5f/Armenia_Alliance_logo.svg" },
+  { id: 11, name: "Քրիստոնեա-ժողովրդավարական", logo: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT8Tyy5XNKDF92eSXtyU6Jrk3ORjBJcLMmv3g&s" },
+  { id: 12, name: "Հայ ազգային կոնգրես", logo: "https://upload.wikimedia.org/wikipedia/commons/5/5b/Anc_logo.PNG" },
+  { id: 13, name: "Նոր ուժ", logo: "https://upload.wikimedia.org/wikipedia/commons/4/4a/New_Power_%28Armenia%29_logo.jpg" },
+  { id: 14, name: "Հանրապետություն", logo: "https://upload.wikimedia.org/wikipedia/commons/0/0e/Hanrapetutyun_Party_logo.png" },
+  { id: 15, name: "Ալյանս", logo: "https://upload.wikimedia.org/wikipedia/commons/3/3e/Alliance_Party.png" },
+  { id: 16, name: "Ռեֆորմիստների", logo: "https://factor.am/wp-content/uploads/2018/09/37500296_1767189420023459_7266293957057839104_n.jpg" },
+  { id: 17, name: "Դեմոկրատիա, օրենք, կարգապահություն", logo: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSORF_prff2D5EBVVKLp1j16k_huqGKP1jq0Q&s" },
+  { id: 18, name: "Քոչարի ազգային վերածնունդ և ազգի զարթոնք", logo: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTLggbEGwu3AVgQn6Cx4xXmf4UYur61rayTeA&s" },
+  { id: 19, name: "Հանուն Հանրապետության...", logo: "https://upload.wikimedia.org/wikipedia/commons/1/1f/%D5%80%D5%A1%D5%B6%D5%B8%D6%82%D5%B6.png" }
+];
+
 // ===== STATE =====
 let display = "LIST";
 let selectedRegion = null;
@@ -62,6 +84,91 @@ function getColors(count) {
   const base = ["#FFA726","#66BB6A","#42A5F5","#AB47BC","#FF7043","#26C6DA","#D4E157","#8D6E63","#EC407A","#78909C"];
   return Array.from({length: count}, (_, i) => base[i % base.length]);
 }
+
+  const logoCache = {};
+
+function getLogo(id) {
+  if (logoCache[id]) return logoCache[id];
+
+  const party = parties.find(p => p.id == id);
+
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+
+  img.src = party?.logo || "";
+
+  img.onerror = () => {
+    // fallback placeholder
+    img.src = "https://via.placeholder.com/100?text=?";
+  };
+
+  logoCache[id] = img;
+  return img;
+}
+
+  const logoPlugin = {
+  id: 'logoPlugin',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    const dataset = chart.getDatasetMeta(0);
+
+    dataset.data.forEach((bar, index) => {
+      const id = chart.data.labels[index];
+      const img = getLogo(id);
+
+      if (!img.complete) return;
+
+      const width = bar.width;
+      const height = width; // square
+
+      const x = bar.x - width / 2;
+      const y = bar.y - height - 10;
+
+      ctx.drawImage(img, x, y, width, height);
+    });
+  }
+};
+
+
+  barChart = new Chart(document.getElementById("barChart"), {
+  type: 'bar',
+  data: {
+    labels,
+    datasets: [{
+      data,
+      backgroundColor: colors
+    }]
+  },
+  options: {
+    layout: {
+      padding: {
+        top: 80 // 👈 IMPORTANT: space for logos + labels
+      }
+    },
+    plugins: {
+      legend: { display: false },
+
+      datalabels: {
+        anchor: 'end',
+        align: 'top',
+        offset: 30, // 👈 push text above logo
+        color: '#111',
+        font: {
+          weight: 'bold',
+          size: 12
+        },
+        formatter: function(value, ctx) {
+          const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
+          const percent = total ? ((value / total) * 100).toFixed(1) : 0;
+          return value + " (" + percent + "%)";
+        }
+      }
+    }
+  },
+  plugins: [ChartDataLabels, logoPlugin] // 👈 ADD HERE
+});
+
+  
 
 // ===== LIVE UPDATES =====
 function startLiveUpdates() {
